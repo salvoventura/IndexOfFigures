@@ -53,7 +53,7 @@ DOC_V2 = '''\
 
 
 def process_book(bk):
-    '''
+    """
     Process each file in the book by:
     1. finding images that are supposed to be indexed (TBD)
     2. adding an anchor to them
@@ -61,8 +61,7 @@ def process_book(bk):
 
     :param bk:
     :return: list of anchor+captions references
-    '''
-
+    """
     # use built in quickparser
     parser = bk.qp
     # caption list for reference
@@ -215,155 +214,6 @@ def run(bk):
         make_index_of_figures_page(bk, captions)
     else:
         print('Nothing to do')
-    return 0
-
-#
-# BACKUP
-#
-def run2(bk):
-    # easiest to use built in quickparser for this
-    parser = bk.qp
-    updated = False
-
-    # For each file in the book
-    for file_id, href in bk.text_iter():
-        data = bk.readfile(file_id)  # load the file
-        parser.setContent(data)  # parse the data
-
-        output = []
-        shelf = []
-        inside_p = False
-        found_img = False
-        found_br = False
-        found_span = False
-        img_name = None
-        img_caption = None
-
-        # caption list for reference
-        captions = []
-
-        # loop through all tags modifying if needed and converting back to xhtml
-        for text, tagprefix, tname, ttype, tattr, in parser.parse_iter():
-
-            # The best way is to shelf every paragraph and modify only the ones that
-            # meet all the conditions in the specific order. But need to complete the
-            # paragraph before any flushing nevertheless.
-
-            # We are looking for img that is followed by a caption in span
-            # <p><img alt="image010" src="../Images/image010.png"/><br/>
-            # <span class="image_caption">Figure 8 - DSLR diagram</span></p>
-            print(shelf)
-            if tname == 'p':
-                if ttype in ['begin'] and not inside_p:
-                    # we got a p opening: hold it to check if the next is an image
-                    inside_p = True
-                    shelf = []
-                    shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-
-                elif ttype in ['end'] and all([inside_p, found_img, found_br, found_span]):
-                    shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-                    # modify, flush and reset
-                    # '<p>',
-                    # '<img alt="image010" src="../Images/image010.png"/>',
-                    # '<br/>',
-                    # '<span class="image_caption">',
-                    # 'Figure 8 - DSLR diagram',
-                    # '</span>',
-                    # '</p>'
-                    open_anchor = parser.tag_info_to_xml('a', 'begin', {'id': 'ref_' + img_name})
-                    close_anchor = parser.tag_info_to_xml('a', 'end')
-                    shelf.insert(2, close_anchor)
-                    shelf.insert(1, open_anchor)
-                    captions.append((img_name, img_caption))
-                    img_name = None
-                    img_caption = None
-                    updated = True
-
-                    for _ in shelf:
-                        output.append(_)
-                    shelf = []
-                    inside_p = False
-                    found_img = False
-                    found_br = False
-                    found_span = False
-                else:
-                    # flush
-                    pass
-
-                continue
-
-            if tname == 'img' and ttype in ['single']:
-                # we got an img after a p: shelf it, and read the tags
-                if inside_p:
-                    found_img = True
-                    img_name = tattr.get('alt', 'Noname')
-                    shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-                else:
-                    # flush and reset
-                    for _ in shelf:
-                        output.append(_)
-                    shelf = []
-                    inside_p = False
-                    found_img = False
-                    found_br = False
-                    found_span = False
-                continue
-
-            if tname == 'br' and ttype in ['single']:
-                # we got a br after an img: shelf it
-                if found_img:
-                    found_br = True
-                    shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-                else:
-                    # flush and reset
-                    for _ in shelf:
-                        output.append(_)
-                    shelf = []
-                    inside_p = False
-                    found_img = False
-                    found_br = False
-                    found_span = False
-                continue
-
-            if tname == 'span':
-                if ttype in ['begin', 'single']:
-                    # we got a span after a br: shelf it
-                    if found_br:
-                        found_span = True
-                        shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-                    else:
-                        # flush and reset
-                        for _ in shelf:
-                            output.append(_)
-                        shelf = []
-                        inside_p = False
-                        found_img = False
-                        found_br = False
-                        found_span = False
-                    continue
-
-                elif ttype in ['end']:
-                    if found_span:
-                        shelf.append(parser.tag_info_to_xml(tname, ttype, tattr))
-                    continue
-
-            # Text is special, so we either push it onto the shelf or into the output buffer
-            if text is not None:
-                if found_span:
-                    img_caption = text
-                    shelf.append(img_caption)
-                else:
-                    output.append(text)
-                continue
-
-            # push the tag into the output buffer
-            # we should reach this point only if all the conditions above fail
-            output.append(parser.tag_info_to_xml(tname, ttype, tattr))
-
-        # rebuild the xhtml text, and write to file, if anything got changed
-        if updated:
-            data = "".join(output)
-            bk.writefile(file_id, str(data))
     return 0
 
 
